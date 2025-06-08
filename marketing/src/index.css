@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .btn-primary {
+    @apply bg-pink text-white font-semibold py-3 px-6 rounded-md transition;
+  }
+  
+  .btn-primary:hover {
+    @apply bg-peach;
+  }
+  
+  .btn-secondary {
+    @apply bg-white border border-gray-300 text-gray-700 font-semibold py-3 px-6 rounded-md transition;
+  }
+  
+  .btn-secondary:hover {
+    @apply border-pink;
+  }
+}
