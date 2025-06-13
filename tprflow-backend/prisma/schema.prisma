@@ -1,0 +1,315 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "windows"]
+  engineType = "library"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Core authentication and organization models
+model Consultancy {
+  id               String           @id @default(cuid())
+  name             String
+  subscriptionPlan SubscriptionPlan @default(free)
+  billingEmail     String?
+  stripeCustomerId String?          @unique
+  maxClients       Int              @default(25)
+  companyLogoUrl   String?
+  brandedEmails    Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  // Relations
+  users               User[]
+  clients             Client[]
+  emailTemplates      EmailTemplate[]
+  billingRecords      BillingRecord[]
+  dailyUsageSnapshots DailyUsageSnapshot[]
+  ActivityLog         ActivityLog[]
+
+  @@map("consultancies")
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  passwordHash    String? // Nullable for OAuth-only users
+  firstName       String
+  lastName        String
+  jobTitle        String?
+  role            UserRole  @default(consultant)
+  consultancyId   String
+  auth0Id         String?   @unique // For OAuth integration
+  profileImageUrl String?
+  lastLogin       DateTime?
+  isDeleted       Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  consultancy           Consultancy     @relation(fields: [consultancyId], references: [id], onDelete: Cascade)
+  assignedClients       Client[]        @relation("AssignedConsultant")
+  activityLogs          ActivityLog[]
+  createdEmailTemplates EmailTemplate[] @relation("CreatedBy")
+
+  @@index([consultancyId])
+  @@index([email])
+  @@map("users")
+}
+
+// Will add Client model in next phase - keeping this focused on auth
+model Client {
+  id                       String           @id @default(cuid())
+  consultancyId            String
+  clientNumber             String
+  clientCode               String
+  clientName               String
+  clientType               ClientType
+  letterCode               String? // FIXED: Removed @db.VarChar(10)
+  tprPortalStatus          TPRPortalStatus  @default(Waiting)
+  stagingDate              DateTime
+  reEnrolmentDate          DateTime // Auto-calculated as staging + 3 years
+  reEnrolmentPeriod        String           @default("3 years")
+  chosenReenrolmentDate    DateTime?
+  currentDeclarationDue    DateTime?
+  declarationCompletedDate DateTime?
+  reminderEmailSentOn      DateTime?
+  assignedConsultantId     String
+  clientContactName        String?
+  clientContactEmail       String?
+  clientPhone              String?
+  employeeCount            Int?
+  lastContactDate          DateTime?
+  annualRevenue            Float? // FIXED: Changed from Decimal to Float
+  riskScore                Int              @default(100)
+  documentsComplete        Int              @default(0)
+  documentsTotal           Int              @default(10)
+  complianceStatus         ComplianceStatus @default(Good)
+  status                   ClientStatus     @default(waiting)
+  notes                    String?
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+
+  // Relations
+  consultancy        Consultancy   @relation(fields: [consultancyId], references: [id], onDelete: Cascade)
+  assignedConsultant User          @relation("AssignedConsultant", fields: [assignedConsultantId], references: [id])
+  reminderLogs       ReminderLog[]
+  activityLogs       ActivityLog[]
+
+  @@index([consultancyId])
+  @@index([status])
+  @@index([stagingDate])
+  @@index([reEnrolmentDate])
+  @@index([assignedConsultantId])
+  @@map("clients")
+}
+
+model ActivityLog {
+  id                String     @id @default(cuid())
+  userId            String?
+  consultancyId     String
+  clientId          String?
+  actionType        ActionType
+  actionDescription String
+  metadata          String? // FIXED: Changed from Json to String for SQLite
+  ipAddress         String?
+  userAgent         String?
+  createdAt         DateTime   @default(now())
+
+  // Relations
+  user        User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  consultancy Consultancy @relation(fields: [consultancyId], references: [id], onDelete: Cascade)
+  client      Client?     @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  @@index([consultancyId, createdAt])
+  @@index([userId])
+  @@index([clientId])
+  @@map("activity_logs")
+}
+
+model EmailTemplate {
+  id              String       @id @default(cuid())
+  consultancyId   String
+  templateType    TemplateType
+  subjectTemplate String
+  bodyTemplate    String // FIXED: Removed @db.Text
+  isActive        Boolean      @default(true)
+  createdBy       String
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  // Relations
+  consultancy  Consultancy   @relation(fields: [consultancyId], references: [id], onDelete: Cascade)
+  creator      User          @relation("CreatedBy", fields: [createdBy], references: [id])
+  reminderLogs ReminderLog[]
+
+  @@map("email_templates")
+}
+
+model ReminderLog {
+  id              String        @id @default(cuid())
+  clientId        String
+  templateId      String?
+  reminderType    ReminderType
+  recipientEmail  String
+  recipientType   RecipientType @default(client)
+  emailProviderId String? // External email service tracking ID
+  sentAt          DateTime?
+  deliveredAt     DateTime?
+  openedAt        DateTime?
+  clickedAt       DateTime?
+  emailStatus     EmailStatus   @default(queued)
+  failureReason   String?
+  retryCount      Int           @default(0)
+  createdAt       DateTime      @default(now())
+
+  // Relations
+  client   Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  template EmailTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([clientId])
+  @@index([sentAt])
+  @@map("reminder_logs")
+}
+
+model BillingRecord {
+  id                    String           @id @default(cuid())
+  consultancyId         String
+  billingPeriodStart    DateTime
+  billingPeriodEnd      DateTime
+  clientCount           Int
+  peakClientCount       Int // Highest number during period
+  planType              SubscriptionPlan
+  baseAmount            Float // FIXED: Changed from Decimal to Float
+  usageAmount           Float // FIXED: Changed from Decimal to Float
+  totalAmount           Float // FIXED: Changed from Decimal to Float
+  currency              String           @default("GBP") // FIXED: Removed @db.VarChar(3)
+  stripeInvoiceId       String?
+  stripePaymentIntentId String?
+  paymentStatus         PaymentStatus    @default(pending)
+  paidAt                DateTime?
+  createdAt             DateTime         @default(now())
+
+  // Relations
+  consultancy Consultancy @relation(fields: [consultancyId], references: [id], onDelete: Cascade)
+
+  @@index([consultancyId])
+  @@map("billing_records")
+}
+
+model DailyUsageSnapshot {
+  id            String           @id @default(cuid())
+  consultancyId String
+  date          DateTime
+  clientCount   Int
+  planType      SubscriptionPlan
+  createdAt     DateTime         @default(now())
+
+  // Relations
+  consultancy Consultancy @relation(fields: [consultancyId], references: [id], onDelete: Cascade)
+
+  @@unique([consultancyId, date])
+  @@index([consultancyId, date])
+  @@map("daily_usage_snapshots")
+}
+
+// Enums
+enum UserRole {
+  admin
+  consultant
+  viewer
+}
+
+enum SubscriptionPlan {
+  free
+  basic
+  premium
+}
+
+enum ClientType {
+  Limited_Company
+  Sole_Trader
+  Charity
+  CIC
+  Partnership
+  Trust
+  Other
+}
+
+enum TPRPortalStatus {
+  Onboarded
+  Waiting
+  Pending
+}
+
+enum ComplianceStatus {
+  Excellent
+  Good
+  Warning
+  Critical
+}
+
+enum ClientStatus {
+  waiting
+  reenrolment_due
+  declaration_due
+  compliant
+  overdue
+}
+
+enum ActionType {
+  client_created
+  client_updated
+  reminder_sent
+  declaration_completed
+  user_login
+  report_generated
+  user_registered
+  user_invited
+}
+
+enum TemplateType {
+  reenrolment_reminder
+  declaration_reminder
+  declaration_urgent
+  monthly_report
+  welcome
+}
+
+enum ReminderType {
+  reenrolment_available
+  reenrolment_window_open
+  declaration_available
+  declaration_warning
+  declaration_urgent
+  declaration_completed
+}
+
+enum RecipientType {
+  client
+  consultant
+}
+
+enum EmailStatus {
+  queued
+  sent
+  delivered
+  failed
+  bounced
+  spam
+  opened
+  clicked
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  failed
+  refunded
+}
