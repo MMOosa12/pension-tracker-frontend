@@ -125,7 +125,7 @@ const Layout = () => {
                   }}
                   className={`group flex items-center px-4 py-3 rounded-xl transition-all duration-300 transform hover:scale-[1.02] ${
                     isActive
-                      ? 'bg-gradient-to-r from-[#401D6C] to-[#EC385D] shadow-lg'
+                      ? 'bg-gradient-to-r from-[#401D6C] to-[#EC385D] shadow-lg text-white'
                       : 'text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:text-purple-700 dark:hover:text-purple-300'
                   }`}
                   title={sidebarCollapsed ? item.label : ''}
@@ -148,7 +148,7 @@ const Layout = () => {
                         </div>
                         <div className={`text-xs transition-colors duration-300 ${
                           isActive 
-                            ? 'text-pink-100' 
+                            ? 'text-white opacity-90' 
                             : 'text-purple-500 dark:text-purple-400'
                         }`}>
                           {item.description}
@@ -249,7 +249,7 @@ const Layout = () => {
                       }}
                       className={`group flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-300 transform hover:scale-[1.02] ${
                         isActive
-                          ? 'bg-gradient-to-r from-[#401D6C] to-[#EC385D] shadow-lg'
+                          ? 'bg-gradient-to-r from-[#401D6C] to-[#EC385D] shadow-lg text-white'
                           : 'text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:text-purple-700 dark:hover:text-purple-300'
                       }`}
                     >
@@ -268,7 +268,7 @@ const Layout = () => {
                         </div>
                         <div className={`text-xs transition-colors duration-300 ${
                           isActive 
-                            ? 'text-pink-100' 
+                            ? 'text-white opacity-90' 
                             : 'text-purple-500 dark:text-purple-400'
                         }`}>
                           {item.description}
